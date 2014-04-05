@@ -37,7 +37,7 @@ lobbyists = urls.map do |url|
   end
 
   if resumeFromHere
-    ScraperWiki.save_var("last_url", url)
+    ScraperWiki.save_var("last_url", url.to_s)
     puts "Downloading #{url}" 
     begin
       lobbyhtml = ""
@@ -52,34 +52,35 @@ lobbyists = urls.map do |url|
       lobbyist = {"employees" => [], "clients" => [], "owners" => []}
   
   
-      companyABN=lobbypage.xpath("//tr/td/b[text() = 'A.B.N: ']/ancestor::td/following-sibling::node()/text()")
-      companyName=lobbypage.xpath("//b[text() = 'Company Details']/ancestor::table/following-sibling::node()//b[text() = 'Name: ']/ancestor::td/following-sibling::node()/text()").first
+      companyABN=lobbypage.xpath("//b[text() = 'A.B.N:']/ancestor::th/following-sibling::node()/text()")
+      companyName=lobbypage.xpath("//b[text() = 'Name:']/ancestor::th/following-sibling::node()/text()").first
       lobbyist["business_name"] = companyName.to_s
       lobbyist["trading_name"] = companyName.to_s
       lobbyist["abn"] =  companyABN.to_s
-      lobbypage.xpath("//tr/td/b[text() = 'Client Details']/ancestor::table/following-sibling::node()[1]//td/text()").each do |client|
-        clientName = client.content.gsub(/\u00a0/, '').strip
-        if clientName.empty? == false and clientName.class != 'binary'
-            lobbyist["clients"] << clientName
-        end
-      end
-      lobbypage.xpath("//tr/td/b[text() = 'Owner Details']/ancestor::table/following-sibling::node()[1]//td/text()").each do |owner|
+      lobbypage.xpath("//b[text() = 'Owner Details']/ancestor::tr/following-sibling::node()//td/text()").each do |owner|
         ownerName = owner.content.gsub(/\u00a0/, '').strip
         if ownerName.empty? == false and ownerName.class != 'binary'
             lobbyist["owners"] << ownerName
         end
       end
-      lobbypage.xpath("//tr/td/b[text() = 'Lobbyist Details']/ancestor::table/following-sibling::node()[1]//td/text()").each do |employee|
+      lobbypage.xpath("//b[text() = 'Client Details']/ancestor::tr/following-sibling::node()//td/text()").each do |client|
+        clientName = client.content.gsub(/\u00a0/, '').strip
+        if clientName.empty? == false and clientName.class != 'binary' and not lobbyist["owners"].include?(clientName) and not lobbyist["employees"].include?(clientName)
+            lobbyist["clients"] << clientName
+        end
+      end
+      lobbypage.xpath("//b[text() = 'Lobbyist Details']/ancestor::tr/following-sibling::node()//td/text()").each do |employee|
         employeeName = employee.content.gsub(/\u00a0/, '').gsub("  ", " ").strip
-        if employeeName.empty? == false and employeeName.class != 'binary'
+        if employeeName.empty? == false and employeeName.class != 'binary' and not lobbyist["clients"].include?(employeeName)
             lobbyist["employees"] << employeeName
         end
       end 
-      lobbyist["last_updated"] = lobbypage.xpath("//b[text() = 'Details Last Updated: ']/ancestor::td/text()")
+      lobbyist["last_updated"] = lobbypage.xpath("//b[text() = 'Details Last Updated: ']/ancestor::td/text()").to_s
 
       lobbyist["employees"] = lobbyist["employees"].to_yaml
       lobbyist["clients"] = lobbyist["clients"].to_yaml
       lobbyist["owners"] = lobbyist["owners"].to_yaml
+      puts "Saving #{companyABN} #{companyName}"
       ScraperWiki.save(unique_keys=["business_name","abn"],scraper_data=lobbyist)
     rescue Timeout::Error => e
       print "Timeout on #{url}"
